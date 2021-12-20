@@ -3,6 +3,9 @@
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use Alura\Cursos\Controller\InterfaceControladorRequisicao;
+use Nyholm\Psr7\Factory\Psr17Factory;
+use Nyholm\Psr7Server\ServerRequestCreator;
+use Psr\Container\ContainerInterface;
 
 // Mostra todos os erros que acontecem.
 ini_set('display_errors', 1);
@@ -15,7 +18,40 @@ if (!array_key_exists($caminho, $rotas)) {
     exit();
 }
 
+// Inicia a sessão.
+session_start();
+
+// a função "stripos" verifica no caminho se há a string "login" no $caminho, retornando true ou false, para ser usado na condição do if.
+$eRotaDeLogin = stripos($caminho, 'login');
+if (!isset($_SESSION['logado']) && $eRotaDeLogin === false) {
+    header('Location: /login');
+    exit();
+}
+
+$psr17Factory = new Psr17Factory();
+
+$creator = new ServerRequestCreator(
+    $psr17Factory, // ServerRequestFactory
+    $psr17Factory, // UriFactory
+    $psr17Factory, // UploadedFileFactory
+    $psr17Factory  // StreamFactory
+);
+
+$serverRequest = $creator->fromGlobals();
+
 $classeControladora = $rotas[$caminho];
+/** @var ContainerInterface $container */
+$container = require __DIR__ . '/../config/dependencies.php';
 /** @var InterfaceControladorRequisicao $controlador */
-$controlador = new $classeControladora();
-$controlador->processaRequisicao();
+$controlador = $container->get($classeControladora);
+/** @var \Nyholm\Psr7\Response $resposta */
+$resposta = $controlador->handle($serverRequest);
+
+// Percorre os vários arrays de cabeçalho e imprime eles.
+foreach ($resposta->getHeaders() as $name => $values) {
+    foreach ($values as $value) {
+        header(sprintf('%s: %s', $name, $value), false);
+    }
+}
+
+echo $resposta->getBody();

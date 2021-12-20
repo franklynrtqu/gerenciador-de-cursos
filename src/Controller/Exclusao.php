@@ -3,41 +3,50 @@
 namespace Alura\Cursos\Controller;
 
 use Alura\Cursos\Entity\Curso;
-use Alura\Cursos\Infra\EntityManagerCreator;
+use Alura\Cursos\Helper\FlashMessageTrait;
 use Doctrine\ORM\EntityManagerInterface;
+use Nyholm\Psr7\Response;
+use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Server\RequestHandlerInterface;
 
-class Exclusao implements InterfaceControladorRequisicao
+class Exclusao implements RequestHandlerInterface
 {
+    use FlashMessageTrait;
+
     private EntityManagerInterface $entityManager;
 
-    public function __construct()
+    public function __construct(EntityManagerInterface $entityManager)
     {
-        $this->entityManager = (new EntityManagerCreator())
-            ->getEntityManager();
+        $this->entityManager = $entityManager;
     }
 
-    public function processaRequisicao(): void
+    public function handle(ServerRequestInterface $request): ResponseInterface
     {
         // Valida se o dado passado é um inteiro.
-        $id = filter_input(
-            INPUT_GET,
-            'id',
+        $idIdentidade = filter_var(
+            $request->getQueryParams()['id'],
             FILTER_VALIDATE_INT
         );
 
-        // Se não foi passado nenhum argumento pela URL,
-        // ou se o argumento passado não é um número inteiro, chamada listar-cursos
-        if (is_null($id) || $id === false) {
-            header('Location: /listar-cursos');
-            return;
+
+        $resposta = new Response('302', ['Location' => '/listar-cursos']);
+        // Verifica se na URL não foi passado nenhum argumento, e se não é um número inteiro.
+        // Se sim, retorna a resposta para /listar-cursos.
+        if (is_null($idIdentidade) || $idIdentidade === false) {
+            $this->defineMessagem('danger', 'Curso inexistente.');
+            return $resposta;
         }
 
         $curso = $this->entityManager->getReference(
             Curso::class,
-            $id
+            $idIdentidade
         );
+
         $this->entityManager->remove($curso);
         $this->entityManager->flush();
-        header('Location: /listar-cursos');
+        $this->defineMessagem('success', "Curso excluído com sucesso.");
+
+        return $resposta;
     }
 }
